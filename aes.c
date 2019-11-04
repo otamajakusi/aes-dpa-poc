@@ -407,8 +407,31 @@ static void InvShiftRows(state_t* state)
 }
 #endif // #if (defined(CBC) && CBC == 1) || (defined(ECB) && ECB == 1)
 
+static int count8(uint8_t x)
+{
+  int c = 0;
+  for (int i = 0; i < 8; i ++)
+  {
+    if (x & (1 << i))  c ++;
+  }
+  return c;
+}
+
+static void distance16(uint8_t* distance, uint8_t round, const state_t* state, const uint8_t* RoundKey)
+{
+  uint8_t i,j;
+  for (i = 0; i < 4; ++i)
+  {
+    for (j = 0; j < 4; ++j)
+    {
+      int c = count8((*state)[i][j] ^ RoundKey[(round * Nb * 4) + (i * Nb) + j]);
+      distance[(i * Nb) + j] = c;
+    }
+  }
+}
+
 // Cipher is the main function that encrypts the PlainText.
-static void Cipher(state_t* state, const uint8_t* RoundKey)
+static void Cipher(state_t* state, const uint8_t* RoundKey, uint8_t* distance)
 {
   uint8_t round = 0;
 
@@ -431,6 +454,10 @@ static void Cipher(state_t* state, const uint8_t* RoundKey)
   SubBytes(state);
   ShiftRows(state);
   AddRoundKey(Nr, state, RoundKey);
+  if (distance)
+  {
+    distance16(distance, round, state, RoundKey);
+  }
 }
 
 #if (defined(CBC) && CBC == 1) || (defined(ECB) && ECB == 1)
@@ -469,7 +496,7 @@ static void InvCipher(state_t* state, const uint8_t* RoundKey)
 void AES_ECB_encrypt(const struct AES_ctx* ctx, uint8_t* buf)
 {
   // The next function call encrypts the PlainText with the Key using AES algorithm.
-  Cipher((state_t*)buf, ctx->RoundKey);
+  Cipher((state_t*)buf, ctx->RoundKey, NULL);
 }
 
 void AES_ECB_decrypt(const struct AES_ctx* ctx, uint8_t* buf)
@@ -478,6 +505,10 @@ void AES_ECB_decrypt(const struct AES_ctx* ctx, uint8_t* buf)
   InvCipher((state_t*)buf, ctx->RoundKey);
 }
 
+void AES_ECB_encrypt_with_distance(const struct AES_ctx* ctx, uint8_t* buf, uint8_t* distance)
+{
+  Cipher((state_t*)buf, ctx->RoundKey, distance);
+}
 
 #endif // #if defined(ECB) && (ECB == 1)
 
@@ -504,7 +535,7 @@ void AES_CBC_encrypt_buffer(struct AES_ctx *ctx, uint8_t* buf, uint32_t length)
   for (i = 0; i < length; i += AES_BLOCKLEN)
   {
     XorWithIv(buf, Iv);
-    Cipher((state_t*)buf, ctx->RoundKey);
+    Cipher((state_t*)buf, ctx->RoundKey, NULL);
     Iv = buf;
     buf += AES_BLOCKLEN;
     //printf("Step %d - %d", i/16, i);
@@ -547,7 +578,7 @@ void AES_CTR_xcrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, uint32_t length)
     {
       
       memcpy(buffer, ctx->Iv, AES_BLOCKLEN);
-      Cipher((state_t*)buffer,ctx->RoundKey);
+      Cipher((state_t*)buffer,ctx->RoundKey, NULL);
 
       /* Increment Iv and handle overflow */
       for (bi = (AES_BLOCKLEN - 1); bi >= 0; --bi)

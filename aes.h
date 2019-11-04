@@ -61,6 +61,8 @@ void AES_ctx_set_iv(struct AES_ctx* ctx, const uint8_t* iv);
 void AES_ECB_encrypt(const struct AES_ctx* ctx, uint8_t* buf);
 void AES_ECB_decrypt(const struct AES_ctx* ctx, uint8_t* buf);
 
+void AES_ECB_encrypt_with_distance(const struct AES_ctx* ctx, uint8_t* buf, uint8_t* distance);
+
 #endif // #if defined(ECB) && (ECB == !)
 
 
