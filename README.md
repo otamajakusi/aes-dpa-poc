@@ -3,7 +3,7 @@ This repository is forked from [tiny-AES-C](https://github.com/kokke/tiny-AES-c)
 
 Since last round of AES encryption doesn't have MixColumn, there are direct relationship between output cipher text and AES key.
 
-To be more specific, if we can have a hamming-distance between output cipher text and last block of expand key for a larget number of pattern, we can guess actual AES key. AES key can be calculated back from the last block of expand key.
+To be more specific, if we can have a hamming-distance between output cipher text and last block of expand key for a large number of pattern, we can guess actual AES key. AES key can be calculated back from the last block of expand key.
 
 #### DPA Requirement
 To guess the actual AES key by DPA, the following conditions are required:
