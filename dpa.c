@@ -8,6 +8,19 @@
 
 #include "aes.h"
 
+typedef enum {
+    dpa_test_16,
+    dpa_test_4,
+    dpa_test_1,
+} dpa_test_type;
+
+/*
+ * hamming distance table.
+ * 00-00, 00-01, 00-02, ...
+ * 01-00, 01-01, 01-02, ...
+ * ..
+ * FF-00, FF-01, FF-02, ...
+ */
 static uint8_t distance_table[256][256];
 static int score_table[16][256];
 
@@ -44,11 +57,51 @@ static void init_score_table()
     memset(score_table, 0, sizeof(score_table));
 }
 
-static void score_by_index(const uint8_t *text, const uint8_t *distance)
+static void score_by_distance_table(
+        const uint8_t *text, const uint8_t *distances, dpa_test_type type)
 {
+    int dist[16] = {0};
+    int mul[3] = {1, 4, 16};
+    switch (type) {
+    default:
+    case dpa_test_16:
+        /* for each 1-byte */
+        for (int i = 0; i < 16; i ++) {
+            dist[i] = distances[i];
+        }
+        break;
+    case dpa_test_4:
+        /* each 4-bytes as a group */
+        for (int i = 0; i < 16; i += 4) {
+            int d = (distances[i]
+                     + distances[i + 1]
+                     + distances[i + 2]
+                     + distances[i + 3]);
+            /* set same value */
+            dist[i + 0] = d;
+            dist[i + 1] = d;
+            dist[i + 2] = d;
+            dist[i + 3] = d;
+        }
+        break;
+    case dpa_test_1:
+        /* a single group */
+        {
+            int d = 0;
+            for (int i = 0; i < 16; i ++) {
+                d += distances[i];
+            }
+            /* set same value */
+            for (int i = 0; i < 16; i ++) {
+                dist[i] = d;
+            }
+        }
+        break;
+    }
+
     for (int n = 0; n < 16; n ++) {
         for (int i = 0; i < 256; i ++) {
-            if (distance_table[text[n]][i] == distance[n]) {
+            if (distance_table[text[n]][i] * mul[type] == dist[n]) {
                 score_table[n][i] ++;
             }
         }
@@ -109,7 +162,19 @@ static int simple_test() {
     return memcmp(text, cipher, sizeof(text));
 }
 
-static int dpa_test() {
+static int cmp_count(const uint8_t *d1, const uint8_t *d2, size_t size)
+{
+    int count = 0;
+    for (size_t i = 0; i < size; i ++) {
+        if (d1[i] == d2[i]) {
+            count ++;
+        }
+    }
+    return count;
+} 
+
+static int dpa_test(dpa_test_type type) {
+    printf("----- dpa test %d ----\n", type);
     struct AES_ctx ctx;
     const uint8_t key[16] = {
         0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,
@@ -122,32 +187,63 @@ static int dpa_test() {
 
     AES_init_ctx(&ctx, key);
     memcpy(text, plain, sizeof(plain));
+    uint8_t *act_key = &ctx.RoundKey[sizeof(ctx.RoundKey) - 16];
+    printf("target key:\n");
+    dump_block(act_key, 16);
+
+    int almost15 = 0;
+    int almost14 = 0;
+    int almost13 = 0;
 
     for (int try = 0;; try ++) {
-        uint8_t distance[16] = {0};
-        AES_ECB_encrypt_with_distance(&ctx, text, distance);
-        score_by_index(text, distance);
+        uint8_t distances[16] = {0};
+        AES_ECB_encrypt_with_distance(&ctx, text, distances);
+        score_by_distance_table(text, distances, type);
 		increment_block(text);
         uint8_t prob_key[16];
         calc_prob_key(prob_key);
-        uint8_t *act_key = &ctx.RoundKey[sizeof(ctx.RoundKey) - 16];
-        if (memcmp(act_key, prob_key, 16) == 0) {
-            printf("key found! by %d try.\n", try);
+        int cmpcnt = cmp_count(act_key, prob_key, 16);
+        if (cmpcnt == 16) {
+            printf("whole key found! by %d try.\n", try);
             break;
+        } else if (cmpcnt == 15 && almost15 == 0) {
+            printf("key of 15-bytes found! by %d try.\n", try);
+            almost15 = 1;
+        } else if (cmpcnt == 14 && almost14 == 0) {
+            printf("key of 14-bytes found! by %d try.\n", try);
+            almost14 = 1;
+        } else if (cmpcnt == 13 && almost13 == 0) {
+            printf("key of 13-bytes found! by %d try.\n", try);
+            almost13 = 1;
+        }
+        if ((try % 0x10000) == 0 && try != 0) {
+            if (try == 0x10000) {
+                printf("inspecting key..\n");
+            }
+            dump_block(prob_key, sizeof(prob_key));
         }
     }
     return 0;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     if (simple_test()) {
         printf("simple_test failed.\n");
         return EXIT_FAILURE;
     }
-    if (dpa_test()) {
-        printf("dpa_test failed.\n");
+    if (dpa_test(dpa_test_16)) {
+        printf("dpa_test_16 failed.\n");
         return EXIT_FAILURE;
     }
+    if (dpa_test(dpa_test_4)) {
+        printf("dpa_test_4 failed.\n");
+        return EXIT_FAILURE;
+    }
+    if (dpa_test(dpa_test_1)) {
+        printf("dpa_test_1 failed.\n");
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
     return EXIT_SUCCESS;
 }
