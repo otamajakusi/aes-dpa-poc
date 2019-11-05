@@ -1,80 +1,17 @@
-### Tiny AES in C
+### AES Differential Power Analysis POC
+This repository is forked from [tiny-AES-C](https://github.com/kokke/tiny-AES-c) and add POC to demonstrate AES Differential Power Analysis(=DPA).
 
-This is a small and portable implementation of the AES [ECB](https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Electronic_Codebook_.28ECB.29), [CTR](https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Counter_.28CTR.29) and [CBC](https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Cipher_Block_Chaining_.28CBC.29) encryption algorithms written in C.
+Since last round of AES encryption doesn't have MixColumn, there are direct relationship between output cipher text and AES key.
 
-You can override the default key-size of 128 bit with 192 or 256 bit by defining the symbols AES192 or AES256 in `aes.h`.
+To be more specific, if we can have a hamming-distance between output cipher text and last block of expand key for a larget number of pattern, we can guess actual AES key. AES key can be calculated back from the last block of expand key.
 
-The API is very simple and looks like this (I am using C99 `<stdint.h>`-style annotated types):
+#### DPA Requirement
+To guess the actual AES key by DPA, the following conditions are required:
 
-```C
-/* Initialize context calling one of: */
-void AES_init_ctx(struct AES_ctx* ctx, const uint8_t* key);
-void AES_init_ctx_iv(struct AES_ctx* ctx, const uint8_t* key, const uint8_t* iv);
+- a number of AES operation can be issued to generate for each different output. 
+- output cipher text can be observed.
+- hamming-distance can be observed.
 
-/* ... or reset IV at random point: */
-void AES_ctx_set_iv(struct AES_ctx* ctx, const uint8_t* iv);
+Detecting actual hamming-distance might be difficult but if there is relationship between power consumption and hamming-distance and if we can observe power consumption, we can use it instead of hamming-distance.
 
-/* Then start encrypting and decrypting with the functions below: */
-void AES_ECB_encrypt(const struct AES_ctx* ctx, uint8_t* buf);
-void AES_ECB_decrypt(const struct AES_ctx* ctx, uint8_t* buf);
-
-void AES_CBC_encrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, uint32_t length);
-void AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, uint32_t length);
-
-/* Same function for encrypting as for decrypting in CTR mode */
-void AES_CTR_xcrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, uint32_t length);
-```
-
-Note: 
- * No padding is provided so for CBC and ECB all buffers should be multiples of 16 bytes. For padding [PKCS7](https://en.wikipedia.org/wiki/Padding_(cryptography)#PKCS7) is recommendable.
- * ECB mode is considered unsafe for most uses and is not implemented in streaming mode. If you need this mode, call the function for every block of 16 bytes you need encrypted. See [wikipedia's article on ECB](https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Electronic_Codebook_(ECB)) for more details.
-
-You can choose to use any or all of the modes-of-operations, by defining the symbols CBC, CTR or ECB. See the header file for clarification.
-
-C++ users should `#include` [aes.hpp](https://github.com/kokke/tiny-AES-c/blob/master/aes.hpp) instead of [aes.h](https://github.com/kokke/tiny-AES-c/blob/master/aes.h)
-
-There is no built-in error checking or protection from out-of-bounds memory access errors as a result of malicious input.
-
-The module uses less than 200 bytes of RAM and 1-2K ROM when compiled for ARM, but YMMV depending on which modes are enabled.
-
-It is one of the smallest implementations in C I've seen yet, but do contact me if you know of something smaller (or have improvements to the code here). 
-
-I've successfully used the code on 64bit x86, 32bit ARM and 8 bit AVR platforms.
-
-
-GCC size output when only CTR mode is compiled for ARM:
-
-    $ arm-none-eabi-gcc -Os -DCBC=0 -DECB=0 -DCTR=1 -c aes.c
-    $ size aes.o
-       text    data     bss     dec     hex filename
-       1343       0       0    1343     53f aes.o
-
-.. and when compiling for the THUMB instruction set, we end up just below 1K in code size.
-
-    $ arm-none-eabi-gcc -Os -mthumb -DCBC=0 -DECB=0 -DCTR=1 -c aes.c
-    $ size aes.o
-       text    data     bss     dec     hex filename
-        979       0       0     979     3d3 aes.o
-
-
-I am using the Free Software Foundation, ARM GCC compiler:
-
-    $ arm-none-eabi-gcc --version
-    arm-none-eabi-gcc (GNU Tools for Arm Embedded Processors 8-2018-q4-major) 8.2.1 20181213 (release)
-    Copyright (C) 2018 Free Software Foundation, Inc.
-    This is free software; see the source for copying conditions.  There is NO
-    warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-
-
-
-This implementation is verified against the data in:
-
-[National Institute of Standards and Technology Special Publication 800-38A 2001 ED](http://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38a.pdf) Appendix F: Example Vectors for Modes of Operation of the AES.
-
-The other appendices in the document are valuable for implementation details on e.g. padding, generation of IVs and nonces in CTR-mode etc.
-
-
-A heartfelt thank-you to all the nice people out there who have contributed to this project.
-
-
-All material in this repository is in the public domain.
+This POC is running on the ideal condition which can detect actual hamming-distance directly by modifying AES function, but if we can observe power consumption, same strategy can be adopted.
