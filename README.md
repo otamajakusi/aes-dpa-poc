@@ -15,3 +15,7 @@ To guess the actual AES key by DPA, the following conditions are required:
 Detecting actual hamming-distance might be difficult but if there is relationship between power consumption and hamming-distance and if we can observe power consumption, we can use it instead of hamming-distance.
 
 This POC is running on the ideal condition which can detect actual hamming-distance directly by modifying AES function, but if we can observe power consumption, same strategy can be adopted.
+
+#### run
+$ make
+$ ./dpa.elf
