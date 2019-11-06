@@ -17,5 +17,7 @@ Detecting actual hamming-distance might be difficult but if there is relationshi
 This POC is running on the ideal condition which can detect actual hamming-distance directly by modifying AES function, but if we can observe power consumption, same strategy can be adopted.
 
 #### run
+```bash
 $ make
 $ ./dpa.elf
+```
